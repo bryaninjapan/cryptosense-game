@@ -1,0 +1,1070 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CryptoSense — 趨勢判斷訓練器</title>
+<style>
+:root {
+  --bg:      #0e1117;
+  --bg2:     #131722;
+  --bg3:     #161b27;
+  --border:  #2a2e39;
+  --border2: #363c52;
+  --text:    #d1d4dc;
+  --muted:   #848e9c;
+  --green:   #26a69a;
+  --red:     #ef5350;
+  --yellow:  #f0b90b;
+  --panel-w: 248px;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);}
+body{color:var(--text);font-family:-apple-system,'SF Pro Display','Segoe UI',sans-serif;font-size:13px;}
+
+/* ── SCREENS ─────────────────────────────────────────────── */
+.screen{position:fixed;inset:0;display:none;flex-direction:column;}
+.screen.active{display:flex;}
+
+/* ── LOADING ─────────────────────────────────────────────── */
+#screen-loading{align-items:center;justify-content:center;gap:18px;}
+.spinner{width:36px;height:36px;border:2.5px solid var(--border);border-top-color:var(--yellow);border-radius:50%;animation:spin .8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+#loading-msg{color:var(--muted);font-size:13px;}
+#loading-err{color:var(--red);font-size:12px;text-align:center;max-width:400px;display:none;line-height:1.6;}
+
+/* ── START ───────────────────────────────────────────────── */
+#screen-start{align-items:center;justify-content:center;background:var(--bg);}
+.start-wrap{display:flex;flex-direction:column;align-items:center;}
+.start-logo{color:var(--yellow);font-size:30px;font-weight:700;letter-spacing:1px;}
+.start-tagline{color:var(--muted);font-size:13px;margin-bottom:32px;margin-top:4px;}
+.start-card{background:var(--bg3);border:0.5px solid var(--border);border-radius:12px;padding:24px 28px;width:420px;}
+.how-title{font-size:10px;color:var(--muted);letter-spacing:.8px;margin-bottom:14px;}
+.how-item{display:flex;gap:10px;margin-bottom:11px;align-items:flex-start;}
+.how-num{width:21px;height:21px;background:rgba(240,185,11,.15);border:0.5px solid rgba(240,185,11,.3);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--yellow);font-weight:600;flex-shrink:0;margin-top:1px;}
+.how-text{font-size:12px;color:var(--text);line-height:1.65;}
+.how-text em{color:var(--muted);font-style:normal;display:block;font-size:11px;margin-top:1px;}
+.start-btn{width:100%;padding:12px;background:var(--yellow);color:#000;font-size:14px;font-weight:700;border-radius:6px;border:none;cursor:pointer;margin-top:18px;transition:opacity .15s;}
+.start-btn:hover{opacity:.88;}
+.lb-wrap{margin-top:18px;padding-top:14px;border-top:0.5px solid var(--border);}
+.lb-title{font-size:10px;color:var(--muted);letter-spacing:.8px;margin-bottom:8px;}
+.lb-row{display:flex;gap:8px;padding:4px 0;font-size:12px;align-items:center;}
+.lb-rank{color:var(--muted);width:18px;flex-shrink:0;}
+.lb-name{flex:1;color:var(--text);}
+.lb-score{color:var(--yellow);font-weight:600;}
+.lb-empty{color:var(--muted);font-size:12px;text-align:center;padding:8px 0;}
+
+/* ── TOPBAR ──────────────────────────────────────────────── */
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:0 16px;height:42px;background:var(--bg3);border-bottom:0.5px solid var(--border);flex-shrink:0;}
+.logo{color:var(--yellow);font-weight:700;font-size:14px;}
+.topbar-center{display:flex;align-items:center;gap:10px;}
+.pair-badge{background:var(--border);padding:3px 10px;border-radius:4px;font-size:12px;}
+.fr-badge{font-size:11px;padding:2px 8px;border-radius:3px;}
+.fr-pos{background:rgba(239,83,80,.12);color:var(--red);}
+.fr-neg{background:rgba(38,166,154,.12);color:var(--green);}
+.fr-neu{background:var(--border);color:var(--muted);}
+.topbar-right{display:flex;align-items:center;gap:14px;font-size:12px;color:var(--muted);}
+.score-val{color:var(--yellow);font-weight:700;font-size:14px;}
+
+/* ── GAME BODY ───────────────────────────────────────────── */
+#screen-game{background:var(--bg);}
+.game-body{display:flex;flex:1;overflow:hidden;}
+.chart-wrap{flex:1;position:relative;overflow:hidden;background:var(--bg2);}
+#chart{width:100%;height:100%;}
+.chart-overlay-info{position:absolute;top:8px;left:10px;font-size:10px;color:var(--muted);pointer-events:none;z-index:5;line-height:1.8;}
+.entry-badge{display:inline-block;background:rgba(240,185,11,.12);border:0.5px solid rgba(240,185,11,.3);color:var(--yellow);padding:1px 6px;border-radius:3px;font-size:10px;}
+
+/* chart mask */
+.chart-mask{position:absolute;top:0;right:0;bottom:30px;width:33%;
+  background:repeating-linear-gradient(135deg,rgba(22,27,39,.96) 0,rgba(22,27,39,.96) 5px,rgba(18,23,34,.96) 5px,rgba(18,23,34,.96) 10px);
+  border-left:1.5px dashed var(--border2);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;pointer-events:none;z-index:4;}
+.mask-num{font-size:28px;font-weight:700;color:#3a4060;}
+.mask-lbl{font-size:10px;color:#3a4060;letter-spacing:.8px;}
+
+/* ── SIDE PANEL ──────────────────────────────────────────── */
+.side-panel{width:var(--panel-w);background:var(--bg3);border-left:0.5px solid var(--border);display:flex;flex-direction:column;overflow:hidden;flex-shrink:0;}
+.p-section{padding:10px 12px;border-bottom:0.5px solid var(--border);flex-shrink:0;}
+.p-title{font-size:10px;color:var(--muted);letter-spacing:.7px;text-transform:uppercase;margin-bottom:8px;}
+
+/* timeframe tabs */
+.tf-row{display:flex;gap:4px;}
+.tf-btn{padding:4px 12px;border-radius:3px;font-size:11px;cursor:pointer;border:0.5px solid var(--border);background:transparent;color:var(--muted);transition:all .15s;}
+.tf-btn.active{background:var(--yellow);color:#000;font-weight:700;border-color:var(--yellow);}
+
+/* entry price */
+.entry-line{display:flex;justify-content:space-between;align-items:center;padding:6px 0;font-size:11px;}
+.entry-key{color:var(--muted);}
+.entry-price{color:var(--yellow);font-weight:600;font-size:13px;}
+
+/* direction buttons */
+.dir-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;}
+.dir-btn{padding:8px 4px;border-radius:4px;text-align:center;cursor:pointer;border:0.5px solid var(--border);background:transparent;color:var(--muted);transition:all .15s;font-size:11px;line-height:1.45;user-select:none;}
+.dir-btn:hover{color:var(--text);border-color:var(--muted);}
+.dir-btn.sel-long{background:rgba(38,166,154,.12);border-color:var(--green);color:var(--green);}
+.dir-btn.sel-short{background:rgba(239,83,80,.12);border-color:var(--red);color:var(--red);}
+.dir-btn.sel-none{background:rgba(132,142,156,.1);border-color:var(--muted);color:var(--text);}
+
+/* SL/TP */
+.sltp-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:4px;}
+.inp-grp label{display:block;font-size:10px;margin-bottom:3px;font-weight:500;}
+.lbl-sl{color:var(--red);}
+.lbl-tp{color:var(--green);}
+.price-inp{width:100%;background:var(--bg2);border:0.5px solid var(--border);border-radius:4px;padding:6px 7px;font-size:12px;color:var(--text);outline:none;transition:border .15s;}
+.price-inp:focus{border-color:var(--yellow);}
+.price-inp::placeholder{color:#3d4460;}
+.price-inp:disabled{opacity:.4;}
+
+/* indicators */
+.ind-list{display:flex;flex-direction:column;overflow-y:auto;flex:1;}
+.ind-item{display:flex;align-items:center;gap:9px;padding:7px 0;border-bottom:0.5px solid #1c1f2e;cursor:pointer;user-select:none;}
+.ind-item:last-child{border-bottom:none;}
+.checkbox{width:14px;height:14px;border:0.5px solid var(--border);border-radius:2px;background:var(--bg2);flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:all .15s;}
+.checkbox.on{background:var(--yellow);border-color:var(--yellow);}
+.checkbox.on::after{content:'✓';font-size:9px;color:#000;font-weight:800;}
+.ind-lbl{font-size:11px;color:var(--text);line-height:1.35;}
+.ind-sub{font-size:9px;color:var(--muted);display:block;}
+
+/* submit */
+.panel-foot{padding:10px 12px;flex-shrink:0;}
+.submit-btn{width:100%;padding:10px;background:var(--yellow);color:#000;font-weight:700;font-size:13px;border-radius:5px;border:none;cursor:pointer;transition:opacity .15s;}
+.submit-btn:hover{opacity:.88;}
+.submit-btn:disabled{opacity:.35;cursor:not-allowed;}
+
+/* ── BOTTOM BAR ──────────────────────────────────────────── */
+.bottombar{height:30px;background:var(--bg3);border-top:0.5px solid var(--border);display:flex;align-items:center;justify-content:center;gap:5px;flex-shrink:0;}
+.dot{width:18px;height:4px;border-radius:2px;background:var(--border);transition:background .3s;}
+.dot.done{background:var(--green);}
+.dot.curr{background:var(--yellow);}
+
+/* ── RESULT OVERLAY ──────────────────────────────────────── */
+#overlay-result{position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:200;display:none;align-items:center;justify-content:center;}
+#overlay-result.show{display:flex;}
+.res-card{background:var(--bg3);border:0.5px solid var(--border);border-radius:12px;width:460px;max-height:88vh;overflow-y:auto;}
+.res-head{display:flex;justify-content:space-between;align-items:center;padding:14px 20px;border-bottom:0.5px solid var(--border);}
+.res-head-title{font-size:15px;font-weight:600;}
+.res-head-sub{font-size:11px;color:var(--muted);}
+.res-body{padding:16px 20px;}
+.res-outcome{text-align:center;padding:14px 0 16px;border-bottom:0.5px solid var(--border);margin-bottom:14px;}
+.outcome-icon{font-size:34px;margin-bottom:6px;}
+.outcome-text{font-size:18px;font-weight:700;}
+.outcome-sub{font-size:11px;color:var(--muted);margin-top:4px;}
+.clr-win{color:var(--green);}
+.clr-loss{color:var(--red);}
+.clr-neu{color:var(--muted);}
+.breakdown{display:flex;flex-direction:column;gap:5px;margin-bottom:14px;}
+.bk-row{display:flex;justify-content:space-between;align-items:center;padding:6px 10px;background:var(--bg2);border-radius:4px;}
+.bk-lbl{font-size:12px;color:var(--muted);}
+.bk-val{font-size:13px;font-weight:600;}
+.clr-pos{color:var(--green);}
+.clr-neg{color:var(--red);}
+.clr-zero{color:var(--muted);}
+.ind-section-title{font-size:10px;color:var(--muted);letter-spacing:.7px;margin-bottom:6px;}
+.ind-results{display:flex;flex-direction:column;gap:3px;margin-bottom:14px;}
+.ir-row{display:flex;justify-content:space-between;align-items:center;padding:4px 8px;border-radius:3px;}
+.ir-lbl{font-size:11px;color:var(--text);}
+.ir-status{font-size:11px;font-weight:600;}
+.ir-hint{font-size:9px;color:var(--muted);margin-left:4px;}
+.round-total{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:var(--border);border-radius:6px;margin-bottom:14px;}
+.rt-lbl{font-size:13px;font-weight:600;}
+.rt-score{font-size:22px;font-weight:700;color:var(--yellow);}
+.correct-dir{font-size:11px;color:var(--muted);text-align:center;margin-bottom:12px;}
+.next-btn{width:100%;padding:11px;background:var(--yellow);color:#000;font-weight:700;font-size:14px;border-radius:5px;border:none;cursor:pointer;}
+.next-btn:hover{opacity:.88;}
+
+/* ── FINAL SCREEN ────────────────────────────────────────── */
+#screen-final{align-items:center;justify-content:center;}
+.final-card{background:var(--bg3);border:0.5px solid var(--border);border-radius:12px;width:460px;padding:30px 32px;max-height:90vh;overflow-y:auto;}
+.final-logo{color:var(--yellow);font-size:22px;font-weight:700;text-align:center;margin-bottom:2px;}
+.final-sub{text-align:center;font-size:12px;color:var(--muted);margin-bottom:20px;}
+.final-score{text-align:center;font-size:58px;font-weight:700;color:var(--yellow);line-height:1;}
+.final-max{text-align:center;font-size:13px;color:var(--muted);margin-top:4px;margin-bottom:8px;}
+.final-grade{text-align:center;font-size:14px;margin-bottom:22px;}
+.name-inp{width:100%;background:var(--bg2);border:0.5px solid var(--border);border-radius:4px;padding:10px 12px;font-size:14px;color:var(--text);outline:none;margin-bottom:10px;transition:border .15s;}
+.name-inp:focus{border-color:var(--yellow);}
+.save-btn{width:100%;padding:11px;background:var(--yellow);color:#000;font-weight:700;font-size:14px;border-radius:5px;border:none;cursor:pointer;margin-bottom:20px;}
+.save-btn:hover{opacity:.88;}
+.final-lb{border-top:0.5px solid var(--border);padding-top:14px;}
+.final-lb-title{font-size:10px;color:var(--muted);letter-spacing:.7px;margin-bottom:10px;}
+.lb-entry{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:0.5px solid #1c1f2e;font-size:12px;}
+.lb-entry:last-child{border-bottom:none;}
+.lb-entry.hl{background:rgba(240,185,11,.07);border-radius:4px;padding:5px 6px;margin:1px -6px;}
+.lb-entry .r{width:22px;color:var(--muted);flex-shrink:0;}
+.lb-entry .n{flex:1;color:var(--text);}
+.lb-entry .d{color:var(--muted);font-size:10px;}
+.lb-entry .s{color:var(--yellow);font-weight:700;}
+.again-btn{width:100%;margin-top:14px;padding:9px;background:transparent;border:0.5px solid var(--border);color:var(--text);font-size:13px;border-radius:5px;cursor:pointer;transition:border .15s;}
+.again-btn:hover{border-color:var(--muted);}
+</style>
+</head>
+<body>
+
+<!-- ══ LOADING ════════════════════════════════════════════ -->
+<div id="screen-loading" class="screen active">
+  <div class="spinner"></div>
+  <div id="loading-msg">正在連接 Binance · Connecting to Binance...</div>
+  <div id="loading-err"></div>
+</div>
+
+<!-- ══ START ══════════════════════════════════════════════ -->
+<div id="screen-start" class="screen">
+  <div class="start-wrap">
+    <div class="start-logo">CryptoSense</div>
+    <div class="start-tagline">趨勢判斷訓練器 · Trend Prediction Trainer</div>
+    <div class="start-card">
+      <div class="how-title">HOW TO PLAY · 遊戲方式</div>
+      <div class="how-item">
+        <div class="how-num">1</div>
+        <div class="how-text">觀察真實BTC歷史K線（100根），判斷後續趨勢方向
+          <em>Read 100 real BTC candles — predict what happens next</em></div>
+      </div>
+      <div class="how-item">
+        <div class="how-num">2</div>
+        <div class="how-text">設置止損、止盈，並勾選當前觸發的分析指標
+          <em>Set SL &amp; TP levels, check which signals are active</em></div>
+      </div>
+      <div class="how-item">
+        <div class="how-num">3</div>
+        <div class="how-text">共10題，每題滿分100分，看看你的交易直覺有多準！
+          <em>10 rounds · up to 100 pts each · test your trading intuition</em></div>
+      </div>
+      <button class="start-btn" onclick="startGame()">開始遊戲 · Start Game</button>
+      <div class="lb-wrap" id="start-lb"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ GAME ════════════════════════════════════════════════ -->
+<div id="screen-game" class="screen">
+  <div class="topbar">
+    <div class="logo">CryptoSense</div>
+    <div class="topbar-center">
+      <div class="pair-badge">BTC/USDT PERP</div>
+      <div id="fr-badge" class="fr-badge fr-neu">FR: —</div>
+    </div>
+    <div class="topbar-right">
+      Round <strong id="rnd-num" style="color:var(--text);margin:0 2px">1</strong>/10
+      &nbsp;·&nbsp;
+      <span class="score-val" id="score-disp">0</span>
+    </div>
+  </div>
+
+  <div class="game-body">
+    <!-- CHART -->
+    <div class="chart-wrap">
+      <div class="chart-overlay-info" id="chart-info">
+        BTC/USDT · 1H · Binance Historical<br>
+        Entry: <span class="entry-badge" id="entry-disp">—</span>
+      </div>
+      <div id="chart"></div>
+      <div class="chart-mask" id="chart-mask">
+        <div class="mask-num">50</div>
+        <div class="mask-lbl">CANDLES HIDDEN · 根隱藏</div>
+      </div>
+    </div>
+
+    <!-- SIDE PANEL -->
+    <div class="side-panel">
+
+      <!-- Timeframe -->
+      <div class="p-section">
+        <div class="p-title">Timeframe · 時間框架</div>
+        <div class="tf-row">
+          <button class="tf-btn active" id="tf-1h" onclick="setTF('1h',this)">1H</button>
+          <button class="tf-btn" id="tf-1d" onclick="setTF('1d',this)">1D</button>
+        </div>
+      </div>
+
+      <!-- Q1: Direction -->
+      <div class="p-section">
+        <div class="p-title">Q1 · Direction · 方向判斷</div>
+        <div class="dir-grid">
+          <div class="dir-btn" id="btn-long"  onclick="setDir('long')">▲ Long<br>做多</div>
+          <div class="dir-btn" id="btn-short" onclick="setDir('short')">▼ Short<br>做空</div>
+          <div class="dir-btn" id="btn-none"  onclick="setDir('none')">— None<br>空倉</div>
+        </div>
+      </div>
+
+      <!-- Q2: SL/TP -->
+      <div class="p-section" id="sltp-sec">
+        <div class="p-title">Q2 · Stop Loss &amp; Take Profit</div>
+        <div class="sltp-grid">
+          <div class="inp-grp">
+            <label class="lbl-sl">SL 止損</label>
+            <input class="price-inp" id="inp-sl" type="number" step="any" placeholder="0">
+          </div>
+          <div class="inp-grp">
+            <label class="lbl-tp">TP 止盈</label>
+            <input class="price-inp" id="inp-tp" type="number" step="any" placeholder="0">
+          </div>
+        </div>
+      </div>
+
+      <!-- Q3: Indicators -->
+      <div class="p-section" style="flex:1;overflow:hidden;display:flex;flex-direction:column;">
+        <div class="p-title">Q3 · Active Signals · 觸發指標</div>
+        <div class="ind-list">
+          <div class="ind-item" onclick="toggleInd('funding')">
+            <div class="checkbox" id="cb-funding"></div>
+            <div class="ind-lbl">資金費率優勢<span class="ind-sub">Funding rate advantage</span></div>
+          </div>
+          <div class="ind-item" onclick="toggleInd('rule123')">
+            <div class="checkbox" id="cb-rule123"></div>
+            <div class="ind-lbl">123法則完成<span class="ind-sub">123 rule confirmed</span></div>
+          </div>
+          <div class="ind-item" onclick="toggleInd('falseBreak')">
+            <div class="checkbox" id="cb-falseBreak"></div>
+            <div class="ind-lbl">假突破出現<span class="ind-sub">False breakout detected</span></div>
+          </div>
+          <div class="ind-item" onclick="toggleInd('largeTF')">
+            <div class="checkbox" id="cb-largeTF"></div>
+            <div class="ind-lbl">大級別框架反轉<span class="ind-sub">Daily timeframe reversal</span></div>
+          </div>
+          <div class="ind-item" onclick="toggleInd('smallTF')">
+            <div class="checkbox" id="cb-smallTF"></div>
+            <div class="ind-lbl">小級別框架反轉<span class="ind-sub">1H timeframe reversal</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Submit -->
+      <div class="panel-foot">
+        <button class="submit-btn" id="submit-btn" onclick="submitAnswer()">送出答案 · Submit →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Progress bar -->
+  <div class="bottombar" id="progress-bar"></div>
+</div>
+
+<!-- ══ RESULT OVERLAY ══════════════════════════════════════ -->
+<div id="overlay-result">
+  <div class="res-card">
+    <div class="res-head">
+      <div class="res-head-title">Round Result · 本輪結果</div>
+      <div class="res-head-sub" id="res-round-lbl">Round 1/10</div>
+    </div>
+    <div class="res-body">
+      <div class="res-outcome">
+        <div class="outcome-icon" id="res-icon">🎯</div>
+        <div class="outcome-text" id="res-text">Take Profit Hit!</div>
+        <div class="outcome-sub" id="res-sub"></div>
+      </div>
+      <div class="breakdown" id="breakdown"></div>
+      <div class="ind-section-title">INDICATOR ACCURACY · 指標準確率</div>
+      <div class="ind-results" id="ind-results"></div>
+      <div class="correct-dir" id="correct-dir"></div>
+      <div class="round-total">
+        <div class="rt-lbl">Round Score · 本輪得分</div>
+        <div class="rt-score" id="rt-score">+0</div>
+      </div>
+      <button class="next-btn" id="next-btn" onclick="nextRound()">Next Round · 下一題 →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ FINAL SCREEN ════════════════════════════════════════ -->
+<div id="screen-final" class="screen">
+  <div class="final-card">
+    <div class="final-logo">CryptoSense</div>
+    <div class="final-sub">BTC/USDT · 10 Rounds · Binance Historical Data</div>
+    <div class="final-score" id="final-score">0</div>
+    <div class="final-max">/ 1000 pts</div>
+    <div class="final-grade" id="final-grade"></div>
+    <input class="name-inp" id="name-inp" placeholder="Enter your name · 輸入名字" maxlength="20">
+    <button class="save-btn" onclick="saveScore()">Save to Leaderboard · 儲存排行榜</button>
+    <div class="final-lb">
+      <div class="final-lb-title">LEADERBOARD · 排行榜</div>
+      <div id="final-lb-list"></div>
+    </div>
+    <button class="again-btn" onclick="playAgain()">Play Again · 再玩一次</button>
+  </div>
+</div>
+
+<!-- lightweight-charts v4 -->
+<script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
+<script>
+'use strict';
+
+/* ═══════════════════════════════════════════════════════════
+   CONFIG
+═══════════════════════════════════════════════════════════ */
+const CFG = {
+  VISIBLE:   100,
+  MAX_HIDDEN: 80,
+  ROUNDS:    10,
+  SCORES: { DIR_TP: 40, DIR_OK: 20, DIR_NONE_OK: 30, TP: 30, SL: -20, IND: 6 },
+  IND_KEYS: ['funding','rule123','falseBreak','largeTF','smallTF'],
+  IND_NAMES: {
+    funding:    ['資金費率 Funding Rate', '資金費率優勢 / Funding Rate'],
+    rule123:    ['123法則 123 Rule',      '123法則完成 / 123 Rule'],
+    falseBreak: ['假突破 False Break',    '假突破出現 / False Breakout'],
+    largeTF:    ['大級別反轉 Daily Rev',  '大級別框架反轉 / Daily Reversal'],
+    smallTF:    ['小級別反轉 1H Rev',     '小級別框架反轉 / 1H Reversal'],
+  }
+};
+
+/* ═══════════════════════════════════════════════════════════
+   STATE
+═══════════════════════════════════════════════════════════ */
+const S = {
+  candles1H: [], candlesD: [], funding: [],
+  rounds: [],
+  cur: 0,
+  totalScore: 0,
+  results: [],
+  chart: null, series: null,
+  entryLine: null, slLine: null, tpLine: null,
+  tf: '1h',
+  ans: null,          // current answer
+  submitted: false,
+  lastSaved: null,
+};
+
+/* ═══════════════════════════════════════════════════════════
+   BINANCE API
+═══════════════════════════════════════════════════════════ */
+async function fetchKlines(interval, limit, endTime) {
+  let url = `https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=${interval}&limit=${limit}`;
+  if (endTime) url += `&endTime=${endTime}`;
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`Binance ${r.status}`);
+  return (await r.json()).map(k => ({
+    time:  Math.floor(k[0] / 1000),
+    open:  +k[1], high: +k[2], low: +k[3], close: +k[4], volume: +k[5]
+  }));
+}
+
+async function fetchFunding() {
+  try {
+    const r = await fetch('https://fapi.binance.com/fapi/v1/fundingRate?symbol=BTCUSDT&limit=1000');
+    if (!r.ok) return [];
+    return (await r.json()).map(f => ({
+      time: Math.floor(f.fundingTime / 1000),
+      rate: +f.fundingRate
+    }));
+  } catch { return []; }
+}
+
+async function loadData() {
+  setMsg('正在載入 1H K線資料 / Loading 1H candles…');
+  const b1 = await fetchKlines('1h', 1000);
+  const b2 = await fetchKlines('1h', 1000, b1[0].time * 1000 + 1);
+  const seen = new Set();
+  S.candles1H = [...b2, ...b1].filter(c => { if (seen.has(c.time)) return false; seen.add(c.time); return true; });
+
+  setMsg('正在載入日線資料 / Loading daily candles…');
+  S.candlesD = await fetchKlines('1d', 200);
+
+  setMsg('正在載入資金費率 / Loading funding rates…');
+  S.funding = await fetchFunding();
+
+  setMsg('正在生成題目 / Generating rounds…');
+  S.rounds = buildRounds();
+}
+
+function setMsg(t) { document.getElementById('loading-msg').textContent = t; }
+
+/* ═══════════════════════════════════════════════════════════
+   ROUND GENERATION
+═══════════════════════════════════════════════════════════ */
+function buildRounds() {
+  const win  = CFG.VISIBLE + CFG.MAX_HIDDEN;          // 180
+  const n    = S.candles1H.length;
+  const avail = n - win;
+  if (avail < CFG.ROUNDS) throw new Error('Not enough candle data');
+
+  const seg  = Math.floor(avail / CFG.ROUNDS);
+  const rounds = [];
+
+  for (let i = 0; i < CFG.ROUNDS; i++) {
+    const base  = i * seg;
+    const off   = Math.floor(Math.random() * Math.max(1, seg - win < 0 ? 1 : seg));
+    const start = Math.min(base + off, avail - 1);
+
+    const visible = S.candles1H.slice(start, start + CFG.VISIBLE);
+    const hidden  = S.candles1H.slice(start + CFG.VISIBLE, start + win);
+
+    // Corresponding daily candles (context)
+    const t0  = visible[0].time - 40 * 86400;
+    const t1  = visible[visible.length - 1].time;
+    const dayC = S.candlesD.filter(c => c.time >= t0 && c.time <= t1).slice(-40);
+
+    // Funding rate at last visible candle
+    const lastT = t1;
+    let fr = 0;
+    if (S.funding.length) {
+      fr = S.funding.reduce((a, b) =>
+        Math.abs(b.time - lastT) < Math.abs(a.time - lastT) ? b : a
+      ).rate;
+    }
+
+    const indicators = calcIndicators(visible, dayC, fr);
+    rounds.push({ visible, hidden, dayC, fr, indicators, entry: visible[visible.length-1].close });
+  }
+  return rounds;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   INDICATOR ALGORITHMS
+═══════════════════════════════════════════════════════════ */
+function swings(candles, lb = 3) {
+  const H = [], L = [];
+  for (let i = lb; i < candles.length - lb; i++) {
+    let h = true, l = true;
+    for (let j = i - lb; j <= i + lb; j++) {
+      if (j === i) continue;
+      if (candles[j].high >= candles[i].high) h = false;
+      if (candles[j].low  <= candles[i].low)  l = false;
+    }
+    if (h) H.push({ i, p: candles[i].high });
+    if (l) L.push({ i, p: candles[i].low  });
+  }
+  return { H, L };
+}
+
+function indFunding(fr) {
+  return Math.abs(fr) >= 0.00005; // ≥0.005% skew
+}
+
+function ind123(candles) {
+  const sub = candles.slice(-60);
+  const { H, L } = swings(sub, 3);
+
+  // Bearish 123: two lower highs, recent low breaks the trough between them
+  for (let i = H.length - 1; i >= 1; i--) {
+    if (H[i].p < H[i-1].p && H[i].i > H[i-1].i) {
+      const troughs = L.filter(l => l.i > H[i-1].i && l.i < H[i].i);
+      if (troughs.length) {
+        const lowestT = Math.min(...troughs.map(l => l.p));
+        const recentLow = Math.min(...sub.slice(-12).map(c => c.low));
+        if (recentLow < lowestT) return true;
+      }
+    }
+  }
+  // Bullish 123: two higher lows, recent high breaks the peak between them
+  for (let i = L.length - 1; i >= 1; i--) {
+    if (L[i].p > L[i-1].p && L[i].i > L[i-1].i) {
+      const peaks = H.filter(h => h.i > L[i-1].i && h.i < L[i].i);
+      if (peaks.length) {
+        const highestP = Math.max(...peaks.map(h => h.p));
+        const recentHigh = Math.max(...sub.slice(-12).map(c => c.high));
+        if (recentHigh > highestP) return true;
+      }
+    }
+  }
+  return false;
+}
+
+function indFalseBreak(candles) {
+  if (candles.length < 25) return false;
+  const base   = candles.slice(15, candles.length - 18);
+  const recent = candles.slice(-18);
+  if (!base.length) return false;
+  const baseH = Math.max(...base.map(c => c.high));
+  const baseL = Math.min(...base.map(c => c.low));
+  const last  = candles[candles.length - 1].close;
+  const rH    = Math.max(...recent.map(c => c.high));
+  const rL    = Math.min(...recent.map(c => c.low));
+  if (rH > baseH && last < baseH) return true;  // false breakout above
+  if (rL < baseL && last > baseL) return true;  // false breakout below
+  return false;
+}
+
+function indLargeTF(dayC) {
+  if (dayC.length < 14) return false;
+  const sub = dayC.slice(-20);
+  const { H, L } = swings(sub, 2);
+  if (H.length >= 2 && L.length >= 2) {
+    const lh = H[H.length-1], ph = H[H.length-2];
+    const ll = L[L.length-1], pl = L[L.length-2];
+    if ((lh.p < ph.p && ll.p < pl.p) ||  // bearish reversal
+        (lh.p > ph.p && ll.p > pl.p))    // bullish reversal
+      return true;
+  }
+  return false;
+}
+
+function indSmallTF(candles) {
+  if (candles.length < 30) return false;
+  const { H, L } = swings(candles, 3);
+  const cut = candles.length - 22;
+  const rL = L.filter(l => l.i >= cut), pL = L.filter(l => l.i < cut);
+  const rH = H.filter(h => h.i >= cut), pH = H.filter(h => h.i < cut);
+  if (rL.length && pL.length && rL[rL.length-1].p < pL[pL.length-1].p) return true;
+  if (rH.length && pH.length && rH[rH.length-1].p > pH[pH.length-1].p) return true;
+  return false;
+}
+
+function calcIndicators(vis, dayC, fr) {
+  return {
+    funding:    indFunding(fr),
+    rule123:    ind123(vis),
+    falseBreak: indFalseBreak(vis),
+    largeTF:    indLargeTF(dayC),
+    smallTF:    indSmallTF(vis),
+  };
+}
+
+/* ═══════════════════════════════════════════════════════════
+   SCORING
+═══════════════════════════════════════════════════════════ */
+function evaluate(round, ans) {
+  const { direction, sl, tp, inds } = ans;
+  const hidden = round.hidden;
+  const entry  = round.entry;
+
+  // ── SL/TP check ──────────────────────────────────────────
+  let sltp = 'neither', hitIdx = null;
+  if (direction !== 'none' && sl > 0 && tp > 0) {
+    for (let i = 0; i < hidden.length; i++) {
+      const c = hidden[i];
+      if (direction === 'long') {
+        if (c.low  <= sl) { sltp = 'sl'; hitIdx = i; break; }
+        if (c.high >= tp) { sltp = 'tp'; hitIdx = i; break; }
+      } else {
+        if (c.high >= sl) { sltp = 'sl'; hitIdx = i; break; }
+        if (c.low  <= tp) { sltp = 'tp'; hitIdx = i; break; }
+      }
+    }
+  }
+
+  // ── Actual direction ─────────────────────────────────────
+  const endIdx   = hitIdx !== null ? hitIdx : hidden.length - 1;
+  const endPrice = hidden[endIdx].close;
+  const chg      = (endPrice - entry) / entry;
+  let actualDir  = chg > 0.012 ? 'long' : chg < -0.012 ? 'short' : 'none';
+
+  // ── Q1 Direction score ───────────────────────────────────
+  let dScore = 0;
+  if (direction === 'none') {
+    if (actualDir === 'none') dScore = CFG.SCORES.DIR_NONE_OK;
+  } else {
+    if (sltp === 'tp') dScore = CFG.SCORES.DIR_TP;
+    else if (sltp === 'sl') dScore = 0;
+    else dScore = direction === actualDir ? CFG.SCORES.DIR_OK : 0;
+  }
+
+  // ── Q2 SL/TP score ───────────────────────────────────────
+  let stScore = 0;
+  if (direction !== 'none') {
+    if (sltp === 'tp') stScore = CFG.SCORES.TP;
+    else if (sltp === 'sl') stScore = CFG.SCORES.SL;
+  }
+
+  // ── Q3 Indicator score ───────────────────────────────────
+  const correct = round.indicators;
+  let iScore = 0;
+  const iDetail = {};
+  for (const k of CFG.IND_KEYS) {
+    const ok = correct[k] === inds[k];
+    iScore += ok ? CFG.SCORES.IND : 0;
+    iDetail[k] = { correct: correct[k], player: inds[k], ok };
+  }
+
+  const roundScore = Math.max(0, dScore + stScore + iScore);
+  return { sltp, hitIdx, actualDir, chg, dScore, stScore, iScore, iDetail, roundScore };
+}
+
+/* ═══════════════════════════════════════════════════════════
+   CHART
+═══════════════════════════════════════════════════════════ */
+function createChart() {
+  const el = document.getElementById('chart');
+  if (S.chart) { S.chart.remove(); S.chart = null; }
+
+  S.chart = LightweightCharts.createChart(el, {
+    layout:  { background: { color: '#131722' }, textColor: '#d1d4dc', fontSize: 11 },
+    grid:    { vertLines: { color: '#2a2e39' }, horzLines: { color: '#2a2e39' } },
+    crosshair: { vertLine: { color: '#4a5270', width: 1, style: 3 }, horzLine: { color: '#4a5270', width: 1, style: 3 } },
+    timeScale: { borderColor: '#2a2e39', timeVisible: true, secondsVisible: false },
+    rightPriceScale: { borderColor: '#2a2e39' },
+    handleScroll: false, handleScale: false,
+  });
+
+  S.series = S.chart.addCandlestickSeries({
+    upColor: '#26a69a', downColor: '#ef5350',
+    borderVisible: false,
+    wickUpColor: '#26a69a', wickDownColor: '#ef5350',
+  });
+
+  const obs = new ResizeObserver(() => {
+    S.chart.applyOptions({ width: el.offsetWidth, height: el.offsetHeight });
+  });
+  obs.observe(el);
+}
+
+function setChartData(candles) {
+  clearLines();
+  S.series.setData(candles);
+  S.chart.timeScale().fitContent();
+}
+
+function clearLines() {
+  if (S.entryLine) { try { S.series.removePriceLine(S.entryLine); } catch{} S.entryLine = null; }
+  if (S.slLine)    { try { S.series.removePriceLine(S.slLine);    } catch{} S.slLine = null; }
+  if (S.tpLine)    { try { S.series.removePriceLine(S.tpLine);    } catch{} S.tpLine = null; }
+}
+
+function addPriceLine(price, color, title, style = 2) {
+  return S.series.createPriceLine({ price, color, lineWidth: 1, lineStyle: style, axisLabelVisible: true, title });
+}
+
+/* ═══════════════════════════════════════════════════════════
+   UI HELPERS
+═══════════════════════════════════════════════════════════ */
+function show(id)  { document.querySelectorAll('.screen').forEach(s => s.classList.remove('active')); document.getElementById(id).classList.add('active'); }
+function fmt(n)    { return n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 }); }
+function fmtP(n)   { return (n >= 0 ? '+' : '') + (n * 100).toFixed(2) + '%'; }
+function fmtFR(r)  { return (r * 100).toFixed(4) + '%'; }
+
+function makeDots() {
+  const bar = document.getElementById('progress-bar');
+  bar.innerHTML = '';
+  for (let i = 0; i < CFG.ROUNDS; i++) {
+    const d = document.createElement('div');
+    d.className = 'dot' + (i < S.cur ? ' done' : i === S.cur ? ' curr' : '');
+    bar.appendChild(d);
+  }
+}
+
+function resetAnswerUI() {
+  S.ans = { direction: null, sl: 0, tp: 0, inds: { funding:false, rule123:false, falseBreak:false, largeTF:false, smallTF:false } };
+  ['long','short','none'].forEach(d => document.getElementById('btn-'+d).className = 'dir-btn');
+  ['sl','tp'].forEach(id => { const el = document.getElementById('inp-'+id); el.value = ''; el.disabled = false; });
+  CFG.IND_KEYS.forEach(k => document.getElementById('cb-'+k).classList.remove('on'));
+  document.getElementById('sltp-sec').style.opacity = '1';
+  document.getElementById('submit-btn').disabled = false;
+  S.submitted = false;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   GAME ACTIONS
+═══════════════════════════════════════════════════════════ */
+function setDir(d) {
+  if (S.submitted) return;
+  S.ans.direction = d;
+  ['long','short','none'].forEach(x => {
+    document.getElementById('btn-'+x).className = 'dir-btn' + (x===d ? ` sel-${x}` : '');
+  });
+  const isNone = d === 'none';
+  document.getElementById('sltp-sec').style.opacity = isNone ? '.4' : '1';
+  ['sl','tp'].forEach(id => document.getElementById('inp-'+id).disabled = isNone);
+}
+
+function setTF(tf, el) {
+  if (S.submitted && tf !== S.tf) return; // don't allow switch mid-reveal for now
+  S.tf = tf;
+  document.querySelectorAll('.tf-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  if (S.rounds.length) renderChart(S.rounds[S.cur]);
+}
+
+function toggleInd(k) {
+  if (S.submitted) return;
+  S.ans.inds[k] = !S.ans.inds[k];
+  document.getElementById('cb-'+k).classList.toggle('on', S.ans.inds[k]);
+}
+
+function renderChart(round) {
+  const mask  = document.getElementById('chart-mask');
+  const tf    = S.tf;
+  let   data;
+
+  if (tf === '1h') {
+    data = round.visible;
+    mask.style.display = 'flex';
+  } else {
+    data = round.dayC.length ? round.dayC : round.visible.slice(-30);
+    mask.style.display = 'none'; // daily = reference, no mask
+  }
+
+  setChartData(data);
+
+  // Entry line (only on 1H)
+  if (tf === '1h') {
+    S.entryLine = addPriceLine(round.entry, '#f0b90b', 'Entry', 0);
+  }
+
+  // Update info
+  const d = new Date(round.visible[0].time * 1000);
+  const label = tf === '1h'
+    ? `BTC/USDT · 1H · ${d.toLocaleDateString()} · Binance Historical`
+    : `BTC/USDT · 1D · Context Chart · Binance Historical`;
+  document.getElementById('chart-info').querySelector('div') ||
+    (document.getElementById('chart-info').innerHTML =
+      `${label}<br>Entry: <span class="entry-badge" id="entry-disp">—</span>`);
+  document.getElementById('chart-info').childNodes[0].textContent = label + '\n';
+
+  document.getElementById('entry-disp').textContent = '$' + fmt(round.entry);
+
+  // Funding rate badge
+  const fr  = round.fr;
+  const frEl = document.getElementById('fr-badge');
+  frEl.textContent = `FR: ${fmtFR(fr)}`;
+  frEl.className = 'fr-badge ' + (fr > 0.00005 ? 'fr-pos' : fr < -0.00005 ? 'fr-neg' : 'fr-neu');
+}
+
+/* ── Load Round ───────────────────────────────────────────── */
+function loadRound(n) {
+  S.cur = n;
+  const round = S.rounds[n];
+
+  resetAnswerUI();
+  makeDots();
+
+  document.getElementById('rnd-num').textContent = n + 1;
+  document.getElementById('score-disp').textContent = S.totalScore;
+
+  // Set 1H tab active by default
+  S.tf = '1h';
+  document.getElementById('tf-1h').classList.add('active');
+  document.getElementById('tf-1d').classList.remove('active');
+
+  renderChart(round);
+
+  // Placeholder hints for SL/TP inputs
+  const e = round.entry;
+  document.getElementById('inp-sl').placeholder = fmt(e * 0.97);
+  document.getElementById('inp-tp').placeholder = fmt(e * 1.03);
+}
+
+/* ── Submit ───────────────────────────────────────────────── */
+function submitAnswer() {
+  if (S.submitted) return;
+  if (!S.ans.direction) { alert('請先選擇方向 / Select a direction first!'); return; }
+
+  const round = S.rounds[S.cur];
+
+  if (S.ans.direction !== 'none') {
+    const sl = +document.getElementById('inp-sl').value;
+    const tp = +document.getElementById('inp-tp').value;
+    if (!sl || !tp || isNaN(sl) || isNaN(tp)) { alert('請輸入止損和止盈價格 / Enter SL and TP prices!'); return; }
+
+    const e = round.entry;
+    if (S.ans.direction === 'long'  && (sl >= e || tp <= e)) { alert('做多：止損須低於入場價，止盈須高於入場價\nLong: SL < entry < TP'); return; }
+    if (S.ans.direction === 'short' && (sl <= e || tp >= e)) { alert('做空：止損須高於入場價，止盈須低於入場價\nShort: TP < entry < SL'); return; }
+
+    S.ans.sl = sl; S.ans.tp = tp;
+  }
+
+  S.submitted = true;
+  document.getElementById('submit-btn').disabled = true;
+
+  // Reveal hidden candles on 1H
+  S.tf = '1h';
+  document.getElementById('tf-1h').classList.add('active');
+  document.getElementById('tf-1d').classList.remove('active');
+
+  const allC = [...round.visible, ...round.hidden];
+  clearLines();
+  S.series.setData(allC);
+  document.getElementById('chart-mask').style.display = 'none';
+  S.chart.timeScale().fitContent();
+
+  // Entry line
+  S.entryLine = addPriceLine(round.entry, '#f0b90b', 'Entry', 0);
+
+  // SL/TP lines
+  if (S.ans.direction !== 'none') {
+    S.slLine = addPriceLine(S.ans.sl, '#ef5350', 'SL');
+    S.tpLine = addPriceLine(S.ans.tp, '#26a69a', 'TP');
+  }
+
+  // Evaluate
+  const result = evaluate(round, S.ans);
+  S.results.push(result);
+  S.totalScore += result.roundScore;
+
+  // Show result after brief pause
+  setTimeout(() => showResult(result), 700);
+}
+
+/* ── Show Result Overlay ──────────────────────────────────── */
+function showResult(result) {
+  const n = S.cur + 1;
+  document.getElementById('res-round-lbl').textContent = `Round ${n}/10`;
+
+  // Outcome
+  let icon, text, sub, cls;
+  if (result.sltp === 'tp') {
+    icon = '🎯'; text = '止盈達成！ Take Profit Hit!'; cls = 'clr-win';
+    sub  = `Hit on candle ${result.hitIdx+1} of hidden · 第${result.hitIdx+1}根隱藏K線達到止盈`;
+  } else if (result.sltp === 'sl') {
+    icon = '🛑'; text = '止損觸發 Stop Loss Hit'; cls = 'clr-loss';
+    sub  = `Hit on candle ${result.hitIdx+1} of hidden · 第${result.hitIdx+1}根隱藏K線觸及止損`;
+  } else if (S.ans.direction === 'none') {
+    const ok = result.actualDir === 'none';
+    icon = ok ? '✅' : '❌';
+    text = ok ? '空倉判斷正確 Ranging Market!' : '行情有明確方向 Market Trended';
+    cls  = ok ? 'clr-win' : 'clr-loss';
+    sub  = `Price change: ${fmtP(result.chg)}`;
+  } else {
+    icon = '⏱️'; text = '時間到 Time Expired'; cls = 'clr-neu';
+    sub  = `${CFG.MAX_HIDDEN} candles elapsed · Final change: ${fmtP(result.chg)}`;
+  }
+
+  document.getElementById('res-icon').textContent = icon;
+  document.getElementById('res-text').textContent  = text;
+  document.getElementById('res-text').className    = `outcome-text ${cls}`;
+  document.getElementById('res-sub').textContent   = sub;
+
+  // Breakdown
+  document.getElementById('breakdown').innerHTML = [
+    ['Q1 Direction · 方向判斷', result.dScore,  result.dScore  > 0 ? 'clr-pos' : 'clr-zero'],
+    ['Q2 SL/TP · 止盈止損',    result.stScore, result.stScore > 0 ? 'clr-pos' : result.stScore < 0 ? 'clr-neg' : 'clr-zero'],
+    ['Q3 Indicators · 指標分析',result.iScore,  result.iScore  > 0 ? 'clr-pos' : 'clr-zero'],
+  ].map(([l, v, c]) => `
+    <div class="bk-row">
+      <span class="bk-lbl">${l}</span>
+      <span class="bk-val ${c}">${v > 0 ? '+' : ''}${v}</span>
+    </div>`).join('');
+
+  // Indicator details
+  document.getElementById('ind-results').innerHTML = CFG.IND_KEYS.map(k => {
+    const { correct, player, ok } = result.iDetail[k];
+    return `
+    <div class="ir-row" style="background:${ok ? 'rgba(38,166,154,.06)' : 'rgba(239,83,80,.06)'}">
+      <span class="ir-lbl">${CFG.IND_NAMES[k][0]}</span>
+      <span class="ir-status ${ok ? 'clr-pos' : 'clr-neg'}">
+        ${ok ? '✓ +6' : '✗ 0'}
+        <span class="ir-hint">(正確:${correct?'✓':'✗'} 你:${player?'✓':'✗'})</span>
+      </span>
+    </div>`;
+  }).join('');
+
+  // Correct direction hint
+  document.getElementById('correct-dir').textContent =
+    `Correct direction · 正確方向: ${result.actualDir === 'long' ? '▲ Long 做多' : result.actualDir === 'short' ? '▼ Short 做空' : '— None 橫盤'}`;
+
+  document.getElementById('rt-score').textContent = '+' + result.roundScore;
+
+  const isLast = S.cur >= CFG.ROUNDS - 1;
+  document.getElementById('next-btn').textContent = isLast
+    ? '查看最終結果 · See Final Results →'
+    : `Next Round · 下一題 (${S.cur+2}/10) →`;
+
+  document.getElementById('overlay-result').classList.add('show');
+}
+
+/* ── Next Round ───────────────────────────────────────────── */
+function nextRound() {
+  document.getElementById('overlay-result').classList.remove('show');
+  if (S.cur >= CFG.ROUNDS - 1) {
+    showFinal();
+  } else {
+    loadRound(S.cur + 1);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   FINAL SCREEN
+═══════════════════════════════════════════════════════════ */
+function showFinal() {
+  const sc = S.totalScore;
+  document.getElementById('final-score').textContent = sc;
+
+  const pct = sc / 1000;
+  let grade;
+  if (pct >= .9)       grade = '🏆 Expert Trader · 交易大師';
+  else if (pct >= .7)  grade = '🥇 Advanced · 進階交易者';
+  else if (pct >= .5)  grade = '🥈 Intermediate · 中級交易者';
+  else if (pct >= .3)  grade = '🥉 Beginner · 初學者';
+  else                 grade = '📚 Keep Studying · 繼續學習';
+  document.getElementById('final-grade').textContent = grade;
+
+  renderFinalLB();
+  show('screen-final');
+}
+
+/* ═══════════════════════════════════════════════════════════
+   LEADERBOARD
+═══════════════════════════════════════════════════════════ */
+function getLB()     { try { return JSON.parse(localStorage.getItem('cs_lb') || '[]'); } catch { return []; } }
+function saveLB(lb)  { localStorage.setItem('cs_lb', JSON.stringify(lb)); }
+
+function saveScore() {
+  const name = document.getElementById('name-inp').value.trim() || 'Anonymous';
+  const lb   = getLB();
+  lb.push({ name, score: S.totalScore, date: new Date().toLocaleDateString('zh-TW') });
+  lb.sort((a, b) => b.score - a.score);
+  saveLB(lb.slice(0, 10));
+  S.lastSaved = name;
+  renderFinalLB();
+}
+
+function renderStartLB() {
+  const lb  = getLB();
+  const el  = document.getElementById('start-lb');
+  if (!lb.length) { el.innerHTML = ''; return; }
+  const medals = ['🥇','🥈','🥉'];
+  el.innerHTML = `<div class="lb-title">LEADERBOARD · 排行榜</div>` +
+    lb.slice(0, 5).map((e, i) => `
+      <div class="lb-row">
+        <span class="lb-rank">${medals[i] || (i+1)}</span>
+        <span class="lb-name">${e.name}</span>
+        <span class="lb-score">${e.score}</span>
+      </div>`).join('');
+}
+
+function renderFinalLB() {
+  const lb  = getLB();
+  const el  = document.getElementById('final-lb-list');
+  if (!lb.length) { el.innerHTML = '<div class="lb-empty">No scores yet · 還沒有記錄</div>'; return; }
+  const medals = ['🥇','🥈','🥉'];
+  el.innerHTML = lb.map((e, i) => {
+    const hl = S.lastSaved && e.name === S.lastSaved && e.score === S.totalScore;
+    return `<div class="lb-entry ${hl ? 'hl' : ''}">
+      <span class="r">${medals[i] || (i+1)}</span>
+      <span class="n">${e.name}</span>
+      <span class="d">${e.date}</span>
+      <span class="s">${e.score}</span>
+    </div>`;
+  }).join('');
+}
+
+/* ═══════════════════════════════════════════════════════════
+   GAME LIFECYCLE
+═══════════════════════════════════════════════════════════ */
+function startGame() {
+  S.cur = 0; S.totalScore = 0; S.results = []; S.lastSaved = null;
+  show('screen-game');
+
+  // Two rAF to ensure DOM painted and chart container has size
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    createChart();
+    loadRound(0);
+  }));
+}
+
+function playAgain() {
+  S.rounds = buildRounds();
+  startGame();
+}
+
+async function init() {
+  try {
+    await loadData();
+    renderStartLB();
+    show('screen-start');
+  } catch(e) {
+    console.error(e);
+    document.getElementById('loading-msg').textContent = '載入失敗 · Load failed';
+    const err = document.getElementById('loading-err');
+    err.style.display = 'block';
+    err.innerHTML = `
+      <strong>Error: ${e.message}</strong><br><br>
+      請確認：<br>
+      1. 已使用 <code>npm start</code> 啟動伺服器<br>
+      2. 網路連接正常可訪問 api.binance.com<br><br>
+      Please ensure:<br>
+      1. Server started with <code>npm start</code><br>
+      2. Network can access api.binance.com
+    `;
+  }
+}
+
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>

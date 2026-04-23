@@ -1,0 +1,12 @@
+{
+  "name": "cryptosense",
+  "version": "1.0.0",
+  "description": "BTC Trading Game — Trend Prediction Trainer",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  }
+}
